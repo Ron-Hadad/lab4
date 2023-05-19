@@ -30,7 +30,7 @@ void quit(state* s);
 // Struct for menu options
 struct fun_desc {
     char* name;
-    MenuFunction fun;
+    void (*MenuFunction)(state*);
 };
 
 // Menu options and corresponding function pointers
@@ -47,14 +47,13 @@ struct fun_desc menu[] = {
     {NULL, NULL}
 };
 
-state program_state = {FALSE}; //Initializing the program_state variable with debug mode turned off.
+state program_state = {0}; //Initializing the program_state variable with debug mode turned off.
 
 int main() {
     while (true) {
-        toggleDebugMode(&program_state);
         // Print debug information
         if (program_state.debug_mode) {
-            fprintf(stderr, "unit_size: %d, file_name: %s, mem_count: %lu\n", 
+            fprintf(stderr, "unit_size: %d, file_name: %s, mem_count: %zu\n", 
                 program_state.unit_size, program_state.file_name, program_state.mem_count);
         }
 
@@ -83,7 +82,7 @@ int main() {
         }
 
         // Execute chosen function
-        menu[chosenOption].fun(&program_state);
+        menu[choice].MenuFunction(&program_state);
     }
     return 0;
 }
@@ -122,7 +121,7 @@ int main() {
         if (newSize == 1 || newSize == 2 || newSize == 4) {
             s->unit_size = newSize;
             if (s->debug_mode)
-                fprintf(stederr, "Debug: set size to %d\n", s->unit_size);
+                fprintf(stderr, "Debug: set size to %d\n", s->unit_size);
         }
         else {
             printf("Invalid unit size. Size unchanged.\n");
