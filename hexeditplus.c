@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+# include <string.h>
 
 // Struct for program state
 typedef struct {
@@ -82,6 +83,9 @@ int main() {
         }
 
         // Execute chosen function
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF) {}
+        // Discard characters until a newline or EOF is encountered
         menu[choice].MenuFunction(&program_state);
     }
     return 0;
@@ -130,27 +134,62 @@ int main() {
 
     // choice = 3
     void loadIntoMemory(state* s){
-        printf("Not implemented yet..");
+         if (s->file_name[0] == '\0') {
+            fprintf(stderr, "Error: No file name specified.\n");
+            return;
+        }
+
+        FILE* file = fopen(s->file_name, "rb");
+        if (file == NULL) {
+            fprintf(stderr, "Error: Failed to open file '%s'.\n", s->file_name);
+            return;
+        }
+
+        char input[100];
+        int location;
+        int length;
+
+        printf("Please enter <location> (hexadecimal) <length> (decimal):\n");
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            fprintf(stderr, "Error: Failed to read input.\n");
+            return;
+        }
+
+        if (sscanf(input, "%x %u", &location, &length) != 2) {
+            fprintf(stderr, "Error: Invalid input format.\n");
+            return;
+        }
+      
+        // if debug mode is on:
+        if (s->debug_mode) {
+            fprintf(stderr, "Debug: file_name set to '%s', location: 0x%x, length: %u\n", s->file_name, location, length);
+        }
+
+        fseek(file, location * s->unit_size, SEEK_SET);
+        size_t bytesRead = fread(s->mem_buf, s->unit_size, length, file);
+        fclose(file);
+
+        printf("Loaded %zu units into memory\n", bytesRead);
     }
 
     // choice = 4
     void toggleDisplayMode(state* s){
-        printf("Not implemented yet..");
+        printf("Not implemented yet..\n");
     }
 
     // choice = 5
     void memoryDisplay(state* s){
-        printf("Not implemented yet..");
+        printf("Not implemented yet..\n");
     }
 
     // choice = 6
     void saveIntoFile(state* s){
-        printf("Not implemented yet..");
+        printf("Not implemented yet..\n");
     }
 
     // choice = 7
     void memoryModify(state* s){
-        printf("Not implemented yet..");
+        printf("Not implemented yet..\n");
     }
 
     // choice = 8
