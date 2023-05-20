@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
-# include <string.h>
+#include <string.h>
+// #include <unit.c>
 
 // Struct for program state
 typedef struct {
@@ -10,6 +11,7 @@ typedef struct {
   int unit_size;
   unsigned char mem_buf[10000];
   size_t mem_count;
+  char display_flag;
   /*
    .
    .
@@ -48,7 +50,7 @@ struct fun_desc menu[] = {
     {NULL, NULL}
 };
 
-state program_state = {0}; //Initializing the program_state variable with debug mode turned off.
+state program_state; //Initializing the program_state global variable 
 
 int main() {
     while (true) {
@@ -60,7 +62,7 @@ int main() {
 
         // Print menu
         int optionCount = 0;
-        printf("Choose action:\n");
+        printf("\nChoose action:\n");
         while (menu[optionCount].name != NULL) {
             printf("%d-%s\n", optionCount, menu[optionCount].name);
             optionCount++;
@@ -68,6 +70,7 @@ int main() {
 
         // Obtain user choice
         int choice;
+        printf("> ");
         scanf("%d", &choice);
 
         // Check if choice is "quit"
@@ -82,10 +85,9 @@ int main() {
             continue;
         }
 
+        setbuf(stdin, NULL); // Discard the "\n" character
+        
         // Execute chosen function
-        int c;
-        while ((c = getchar()) != '\n' && c != EOF) {}
-        // Discard characters until a newline or EOF is encountered
         menu[choice].MenuFunction(&program_state);
     }
     return 0;
@@ -97,11 +99,11 @@ int main() {
     // choice = 0
     void toggleDebugMode(state* s) {
         if (!s->debug_mode) {
-            s->debug_mode = true;
+            s->debug_mode = 1;
             fprintf(stderr, "Debug flag now on\n");
         }
         else {
-            s->debug_mode = false;
+            s->debug_mode = 0;
             fprintf(stderr, "Debug flag now off\n");
         }
     }
@@ -146,17 +148,19 @@ int main() {
         }
 
         char input[100];
-        int location;
-        int length;
+        unsigned int location;
+        unsigned int length;
 
         printf("Please enter <location> (hexadecimal) <length> (decimal):\n");
         if (fgets(input, sizeof(input), stdin) == NULL) {
             fprintf(stderr, "Error: Failed to read input.\n");
+            fclose(file);
             return;
         }
 
         if (sscanf(input, "%x %u", &location, &length) != 2) {
             fprintf(stderr, "Error: Invalid input format.\n");
+            fclose(file);
             return;
         }
       
@@ -167,19 +171,51 @@ int main() {
 
         fseek(file, location * s->unit_size, SEEK_SET);
         size_t bytesRead = fread(s->mem_buf, s->unit_size, length, file);
+        // Update mem_count
+        unsigned int unitsRead = bytesRead / s->unit_size;
+        s->mem_count += unitsRead;
         fclose(file);
-
         printf("Loaded %zu units into memory\n", bytesRead);
     }
 
     // choice = 4
     void toggleDisplayMode(state* s){
-        printf("Not implemented yet..\n");
-    }
+        if (s->display_flag) {
+            printf("Display flag now off, decimal representation\n");
+            s->display_flag = 0; // Turn display flag off
+        }
+        else {
+            printf("Display flag now on, hexadecimal representation\n");
+            s->display_flag = 1; // Turn display flag on
+        }
+}
 
     // choice = 5
     void memoryDisplay(state* s){
-        printf("Not implemented yet..\n");
+        unsigned int addr;
+        unsigned int length;
+        printf("Enter address and length:\n> ");
+        if (scanf("%x %u", &addr, &length) != 2) {
+            fprintf(stderr, "Error: Invalid input format.\n");
+            return;
+        }
+        unsigned int start_addr;
+        if (addr == 0) {
+            start_addr = s->mem_count;
+        }
+        else {
+            start_addr = addr;
+        }
+        // Calculate the byte offset based on the start address and unit size
+        char* start_ptr = s->mem_buf + (start_addr * s->unit_size);
+
+        printf("%s\n", (s->display_flag) ? "Hexadecimal" : "Decimal");
+        printf((s->display_flag) ? "===========\n" : "=======\n");
+
+        // Print units according to the display flag
+        print_units(stdout, start_ptr, length);
+
+        printf("\n");
     }
 
     // choice = 6
