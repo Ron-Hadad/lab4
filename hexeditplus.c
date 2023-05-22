@@ -2,7 +2,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-// #include <unit.c>
+#include <unistd.h>
+#include <fcntl.h>
 
 // Struct for program state
 typedef struct {
@@ -36,6 +37,7 @@ struct fun_desc {
     void (*MenuFunction)(state*);
 };
 
+
 // Menu options and corresponding function pointers
 struct fun_desc menu[] = {
     {"Toggle Debug Mode", toggleDebugMode},
@@ -50,7 +52,7 @@ struct fun_desc menu[] = {
     {NULL, NULL}
 };
 
-state program_state; //Initializing the program_state global variable 
+state program_state = {.unit_size = 1}; //Initializing the program_state global variable 
 
 int main() {
     while (true) {
@@ -136,7 +138,7 @@ int main() {
 
     // choice = 3
     void loadIntoMemory(state* s){
-         if (s->file_name[0] == '\0') {
+        if (s->file_name[0] == '\0') {
             fprintf(stderr, "Error: No file name specified.\n");
             return;
         }
@@ -170,12 +172,11 @@ int main() {
         }
 
         fseek(file, location * s->unit_size, SEEK_SET);
-        size_t bytesRead = fread(s->mem_buf, s->unit_size, length, file);
+        size_t x = fread(s->mem_buf, s->unit_size, length, file);
         // Update mem_count
-        unsigned int unitsRead = bytesRead / s->unit_size;
-        s->mem_count += unitsRead;
+        s->mem_count += x;
         fclose(file);
-        printf("Loaded %zu units into memory\n", bytesRead);
+        printf("Loaded %zu units into memory\n", x);
     }
 
     // choice = 4
@@ -192,40 +193,144 @@ int main() {
 
     // choice = 5
     void memoryDisplay(state* s){
-        unsigned int addr;
-        unsigned int length;
+        static char* hex_formats[] = {"%hhX\n", "%hX\n", "No such unit", "%X\n"};
+        static char* dec_formats[] = {"%hhd\n", "%hd\n", "No such unit", "%d\n"};
+        char input[256];
+        int addr = 0;
+        int length = 0;
+        FILE* file = NULL;
+        void *start_addr;
+
         printf("Enter address and length:\n> ");
-        if (scanf("%x %u", &addr, &length) != 2) {
+        if(fgets(input, 256, stdin) == NULL){
+            fprintf(stderr, "Error: Failed to read input.\n");
+            return;
+        }
+        if (sscanf(input, "%x %d", &addr, &length) != 2) {
             fprintf(stderr, "Error: Invalid input format.\n");
             return;
         }
-        unsigned int start_addr;
-        if (addr == 0) {
-            start_addr = s->mem_count;
+        if(addr == 0)
+            start_addr = &(s->mem_buf);
+        else
+            start_addr = &addr;
+
+        if (s->file_name[0] == '\0') {
+            fprintf(stderr, "Error: No file name specified.\n");
+            return;
         }
-        else {
-            start_addr = addr;
+
+        file = fopen(s->file_name, "rb");
+        if (file == NULL) {
+            fprintf(stderr, "Error: Failed to open file '%s'.\n", s->file_name);
+            return;
         }
-        // Calculate the byte offset based on the start address and unit size
-        char* start_ptr = s->mem_buf + (start_addr * s->unit_size);
-
-        printf("%s\n", (s->display_flag) ? "Hexadecimal" : "Decimal");
-        printf((s->display_flag) ? "===========\n" : "=======\n");
-
-        // Print units according to the display flag
-        print_units(stdout, start_ptr, length);
-
-        printf("\n");
+        
+        if(s->display_flag){
+            printf("Hexadecimal\n");
+            printf("===========\n");
+        }
+        else{
+            printf("Decimal\n");
+            printf("=======\n");
+        }
+        for (int i = 0; i < length; i++) {
+            if(s->display_flag)
+                printf(hex_formats[s->unit_size -1], *((int*)start_addr));
+            else
+                printf(dec_formats[s->unit_size -1], *((int*)start_addr));
+            start_addr += s->unit_size;
+        }
+        fclose(file);
     }
 
     // choice = 6
     void saveIntoFile(state* s){
-        printf("Not implemented yet..\n");
+        if (s->file_name[0] == '\0') {
+            fprintf(stderr, "Error: File name is not set.\n");
+            return;
+        }
+        char input[256];
+        unsigned int source_addr;
+        unsigned int target_loc;
+        unsigned int length;
+        void *start_ptr;
+        printf("Please enter <source-address> <target-location> <length>\n");
+        if(fgets(input, 256, stdin) == NULL){
+            fprintf(stderr, "Error: Failed to read input.\n");
+            return;
+        }
+        if (sscanf(input, "%x %x %d", &source_addr, &target_loc, &length) != 3) {
+            fprintf(stderr, "Error: Invalid input format.\n");
+            return;
+        }
+        int file = open(s->file_name, O_RDWR);
+        if (file == -1) {
+            fprintf(stderr, "Error: Failed to open file '%s' for writing.\n", s->file_name);
+            return;
+        }
+        // Get the file size
+        off_t file_size = lseek(file, 0, SEEK_END);
+         if (file_size == -1) {
+            fprintf(stderr, "Error: Failed to get file size.\n");
+            close(file);
+            return;
+        }
+        if (target_loc >= file_size) {
+            fprintf(stderr, "Error: Target location exceeds file size. No data will be copied.\n");
+            close(file);
+            return;
+        }
+        if(source_addr == 0)
+            start_ptr = &(s->mem_buf);
+        else
+            start_ptr = &source_addr;
+        
+        // Seek to the target location in the file
+        if (lseek(file, target_loc, SEEK_SET) == -1) {
+            fprintf(stderr, "Error: Failed to seek to target location in the file.\n");
+            close(file);
+            return;
+        }
+        // Write the memory content to the file
+        ssize_t bytes_written = write(file, start_ptr, s->unit_size * length);
+        if (bytes_written == -1) {
+            fprintf(stderr, "Error: Failed to write data to file.\n");
+        } 
+        else {
+            printf("Data written to file successfully.\n");
+        }
+        
+        close(file);
     }
 
     // choice = 7
     void memoryModify(state* s){
-        printf("Not implemented yet..\n");
+        unsigned int location;
+        unsigned int val;
+        char input[256];
+        printf("Please enter <location> <val>\n");
+        if(fgets(input, 256, stdin) == NULL){
+            fprintf(stderr, "Error: Failed to read input.\n");
+            return;
+        }
+        if (sscanf(input, "%x %x", &location, &val) != 2) {
+            fprintf(stderr, "Error: Invalid input format.\n");
+            return;
+        }
+
+        if (s->debug_mode) {
+            printf("Location: 0x%x\n", location);
+            printf("Val: 0x%x\n", val);
+        }
+        if (location < 0 || location >= s->mem_count * s->unit_size) {
+            fprintf(stderr, "Error: Invalid memory location.\n");
+            return;
+        }
+        unsigned char* memory_ptr = s->mem_buf + location;
+        *memory_ptr = val;
+
+        printf("Memory modified successfully.\n");
     }
 
     // choice = 8
