@@ -323,12 +323,13 @@ int main() {
             printf("Location: 0x%x\n", location);
             printf("Val: 0x%x\n", val);
         }
-        if (location < 0 || location >= s->mem_count * s->unit_size) {
+        if (location + s->unit_size > 10000) {
             fprintf(stderr, "Error: Invalid memory location.\n");
             return;
         }
-        unsigned char* memory_ptr = s->mem_buf + location;
-        *memory_ptr = val;
+        // Modify the memory buffer
+        unsigned int* memPtr = (unsigned int*)(s->mem_buf + location);
+        *memPtr = val;
 
         printf("Memory modified successfully.\n");
     }
